@@ -3,7 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Budget Tracker</title>
+<link rel="apple-touch-icon" href="duo-icon.png?v=2">
+<link rel="icon" href="duo-icon.png?v=2">
+<meta name="apple-mobile-web-app-title" content="Lelo’s Budget">
+<title>Lelo’s Budget</title>
 <style>
 :root{--bg:#ffe4ef;--card:#fff8fb;--text:#5a2d45;--muted:#a1708a;--line:#f8cde0;--accent:#ec6fa1;--bad:#d6456f;--good:#3f9c84;color-scheme:light;
 box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -42,7 +45,7 @@ button.primary{background:var(--accent);color:#fff;border-color:var(--accent);fo
 </head>
 <body>
 <main>
-<h1>🐰 My Budget 🌸 <input id="month" type="month" style="width:auto;font-size:14px;padding:6px 8px"></h1>
+<h1>🐰 Lelo’s Budget 🎀 <input id="month" type="month" style="width:auto;font-size:14px;padding:6px 8px"></h1>
 
 <div class="card">
   <div class="stats">
@@ -55,7 +58,7 @@ button.primary{background:var(--accent);color:#fff;border-color:var(--accent);fo
 <div class="card">
   <div class="row">
     <div><label for="budget">Monthly budget</label><input id="budget" type="number" inputmode="decimal" min="0" placeholder="e.g. 1500"></div>
-    <div style="max-width:90px"><label for="cur">Currency</label><input id="cur" maxlength="4"></div>
+    
   </div>
   <div class="bar" id="bar"><div></div></div>
   <div class="small" id="budMsg">Set a budget to track your progress.</div>
@@ -77,7 +80,7 @@ button.primary{background:var(--accent);color:#fff;border-color:var(--accent);fo
   <button class="primary" id="add" type="button">Add</button>
 </div>
 
-<div class="card" id="catCard"><b>Where it went 🌸</b><div id="cats"></div></div>
+<div class="card" id="catCard"><b>Where it went 🎀</b><div id="cats"></div></div>
 
 <div class="card"><b>Transactions 💕</b><div id="list"></div></div>
 <button id="clear" type="button" class="small" style="margin-bottom:16px">Clear this month</button>
@@ -85,11 +88,13 @@ button.primary{background:var(--accent);color:#fff;border-color:var(--accent);fo
 
 <script>
 (function(){
-var EXP=["Food","Transport","Bills","Shopping","Study","Fun","Other"];
-var INC=["Allowance","Salary","Side income","Other"];
+var EXP=["Food and drinks","Transport","Bills","Shopping","Study","Fun","Other"];
+var INC=["Allowance","Bantuan","Biasiswa","Side income","Other"];
 var KEY="budget-tracker-v1";
 var S={tx:[],budget:{},cur:"RM"};
 try{var raw=localStorage.getItem(KEY);if(raw){var p=JSON.parse(raw);if(p&&p.tx)S=p;}}catch(e){}
+S.cur="RM";
+S.tx.forEach(function(t){if(t.cat==="Food")t.cat="Food and drinks";if(t.cat==="Salary")t.cat="Bantuan"});
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
 var $=function(id){return document.getElementById(id)};
 var type="exp";
@@ -97,7 +102,6 @@ var today=new Date();
 function iso(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
 $("date").value=iso(today);
 $("month").value=iso(today).slice(0,7);
-$("cur").value=S.cur||"RM";
 function fmt(n){return S.cur+" "+n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
 function fillCats(){var l=type==="exp"?EXP:INC;$("cat").innerHTML="";l.forEach(function(c){var o=document.createElement("option");o.textContent=c;$("cat").appendChild(o)})}
 fillCats();
@@ -149,7 +153,6 @@ $("add").onclick=function(){
   save();render();
 };
 $("budget").onchange=function(){S.budget[$("month").value]=parseFloat($("budget").value)||0;save();render()};
-$("cur").onchange=function(){S.cur=$("cur").value.trim()||"RM";save();render()};
 $("month").onchange=render;
 var clr=$("clear"),clrT;
 function clrReset(){clr.dataset.arm="";clr.textContent="Clear this month"}

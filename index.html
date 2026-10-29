@@ -41,6 +41,10 @@ button.primary{background:var(--accent);color:#fff;border-color:var(--accent);fo
 .tx button{width:auto;padding:4px 9px;border-radius:8px;color:var(--muted)}
 .seg{display:flex;gap:6px}.seg button{padding:8px}.seg button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 .empty{text-align:center;color:var(--muted);padding:14px 0}
+#modal{display:none;position:fixed;inset:0;background:rgba(90,45,69,.45);align-items:center;justify-content:center;padding:24px;z-index:50}
+#modal .box{background:var(--card);border:2px solid var(--line);border-radius:22px;padding:20px;max-width:340px;width:100%;text-align:center;box-shadow:0 6px 0 var(--line)}
+#modal p{margin:0 0 16px;font-size:16px}
+#modal .row button{border-radius:999px;font-weight:700}
 </style>
 </head>
 <body>
@@ -83,9 +87,12 @@ button.primary{background:var(--accent);color:#fff;border-color:var(--accent);fo
 <div class="card" id="catCard"><b>Where it went 🎀</b><div id="cats"></div></div>
 
 <div class="card"><b>Transactions 💕</b><div id="list"></div></div>
+<div class="card"><b>Share report 💌</b><div class="small" style="margin:2px 0 8px">Send this month’s summary as a picture.</div><button id="shImg" type="button" class="primary">Share as image</button><div class="small" id="shMsg" style="margin-top:8px"></div></div>
+<div class="card"><b>Backup 🎀</b><div class="small" style="margin:2px 0 8px">Save your entries to a file, so you can get them back if they ever disappear.</div><div class="row"><button id="bkBtn" type="button" class="primary">Backup</button><button id="rsBtn" type="button" class="primary">Restore</button></div><input id="rsFile" type="file" accept=".txt,.json,text/plain,application/json" hidden><div class="small" id="bkMsg" style="margin-top:8px"></div></div>
 <button id="clear" type="button" class="small" style="margin-bottom:16px">Clear this month</button>
 </main>
 
+<div id="modal"><div class="box"><p id="mText"></p><div class="row"><button id="mNo" type="button">Cancel</button><button id="mOk" type="button" class="primary">OK</button></div></div></div>
 <script>
 (function(){
 var EXP=["Food and drinks","Transport","Bills","Shopping","Study","Fun","Other"];
@@ -154,11 +161,103 @@ $("add").onclick=function(){
 };
 $("budget").onchange=function(){S.budget[$("month").value]=parseFloat($("budget").value)||0;save();render()};
 $("month").onchange=render;
-var clr=$("clear"),clrT;
-function clrReset(){clr.dataset.arm="";clr.textContent="Clear this month"}
-clr.onclick=function(){
-  if(clr.dataset.arm!=="1"){clr.dataset.arm="1";clr.textContent="Tap again to confirm";clearTimeout(clrT);clrT=setTimeout(clrReset,3000);return}
-  var m=$("month").value;S.tx=S.tx.filter(function(t){return t.date.slice(0,7)!==m});save();render();clrReset();
+var mo=$("modal"),mOk=$("mOk"),mCb=null;
+function closeAsk(){mo.style.display="none";mCb=null}
+function ask(msg,label,fn){$("mText").textContent=msg;mOk.textContent=label;mCb=fn;mo.style.display="flex"}
+$("mNo").onclick=closeAsk;
+mo.onclick=function(e){if(e.target===mo)closeAsk()};
+mOk.onclick=function(){var f=mCb;closeAsk();if(f)f()};
+$("clear").onclick=function(){
+  var m=$("month").value;
+  ask("Clear all entries for "+m+"? This can’t be undone.","Yes, clear",function(){S.tx=S.tx.filter(function(t){return t.date.slice(0,7)!==m});save();render()});
+};
+function dataBytes(u){var s=atob(u.split(",")[1]),a=new Uint8Array(s.length);for(var i=0;i<s.length;i++)a[i]=s.charCodeAt(i);return a}
+function drawReport(){
+  var m=$("month").value;
+  var tx=S.tx.filter(function(t){return t.date.slice(0,7)===m}).sort(function(a,b){return b.date.localeCompare(a.date)||b.id-a.id});
+  var inc=0,exp=0,by={};
+  tx.forEach(function(t){if(t.type==="inc")inc+=t.amt;else{exp+=t.amt;by[t.cat]=(by[t.cat]||0)+t.amt}});
+  var keys=Object.keys(by).sort(function(a,b){return by[b]-by[a]}),rows=tx.slice(0,15);
+  var W=1080,P=48,F='ui-rounded,"Nunito",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
+  var catH=keys.length?90+keys.length*64:0,txH=90+Math.max(rows.length,1)*66;
+  var H=190+170+30+(catH?catH+30:0)+txH+30+90;
+  var cv=document.createElement("canvas");cv.width=W;cv.height=H;
+  var x=cv.getContext("2d");
+  function rr(a,b,w,h,r){x.beginPath();x.moveTo(a+r,b);x.arcTo(a+w,b,a+w,b+h,r);x.arcTo(a+w,b+h,a,b+h,r);x.arcTo(a,b+h,a,b,r);x.arcTo(a,b,a+w,b,r);x.closePath()}
+  function card(b,h){rr(P,b,W-2*P,h,28);x.fillStyle="#fff8fb";x.fill();x.lineWidth=4;x.strokeStyle="#f8cde0";x.stroke()}
+  function txt(s,a,b,size,color,al,bold){x.font=(bold?"bold ":"")+size+"px "+F;x.fillStyle=color;x.textAlign=al||"left";x.fillText(s,a,b)}
+  function fit(s,max){if(x.measureText(s).width<=max)return s;while(s.length>1&&x.measureText(s+"…").width>max)s=s.slice(0,-1);return s+"…"}
+  x.fillStyle="#ffe4ef";x.fillRect(0,0,W,H);
+  var ml=new Date(+m.slice(0,4),+m.slice(5,7)-1,1).toLocaleString("en-GB",{month:"long",year:"numeric"});
+  txt("🐰 Lelo’s Budget 🎀",P,100,56,"#5a2d45","left",true);
+  txt(ml,P,150,34,"#a1708a");
+  var y=190;card(y,170);
+  var cw=(W-2*P)/3,lab=["Income","Spent","Balance"],val=[inc,exp,inc-exp],col=["#3f9c84","#d6456f",inc-exp<0?"#d6456f":"#3f9c84"];
+  for(var i=0;i<3;i++){var cx=P+cw*i+cw/2;txt(lab[i],cx,y+62,30,"#a1708a","center");txt(fmt(val[i]),cx,y+120,38,col[i],"center",true)}
+  y+=170+30;
+  if(catH){card(y,catH);txt("Where it went 🎀",P+32,y+62,36,"#5a2d45","left",true);
+    keys.forEach(function(k,j){var by0=y+110+j*64;txt(k,P+32,by0,30,"#5a2d45");
+      rr(430,by0-22,320,22,11);x.fillStyle="#f8cde0";x.fill();
+      rr(430,by0-22,Math.max(22,320*by[k]/exp),22,11);x.fillStyle="#ec6fa1";x.fill();
+      txt(fmt(by[k]),W-P-32,by0,30,"#5a2d45","right")});
+    y+=catH+30}
+  card(y,txH);txt("Transactions 💕",P+32,y+62,36,"#5a2d45","left",true);
+  if(!rows.length)txt("No entries this month",P+32,y+130,30,"#a1708a");
+  rows.forEach(function(t,j){var ry=y+120+j*66;
+    txt(t.date.slice(8)+"/"+t.date.slice(5,7),P+32,ry,28,"#a1708a");
+    x.font="30px "+F;txt(fit(t.note||t.cat,430),180,ry,30,"#5a2d45");
+    txt((t.type==="inc"?"+":"−")+fmt(t.amt),W-P-32,ry,30,t.type==="inc"?"#3f9c84":"#d6456f","right",true)});
+  txt("Made with 💕",W/2,H-40,28,"#a1708a","center");
+  return cv;
+}
+function deliver(blob,fname,type,msgId){
+  var f=null;try{f=new File([blob],fname,{type:type})}catch(e){}
+  if(f&&navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f],title:"Lelo’s Budget"}).catch(function(){});return}
+  var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=fname;document.body.appendChild(a);a.click();a.remove();
+  $(msgId||"shMsg").textContent="Saved to your phone. Find it in Files or Photos.";
+}
+function shareReport(){
+  try{
+    var cv=drawReport(),name="lelo-budget-"+$("month").value;
+    deliver(new Blob([dataBytes(cv.toDataURL("image/png"))],{type:"image/png"}),name+".png","image/png");
+  }catch(e){$("shMsg").textContent="Sorry, something went wrong. Try again."}
+}
+$("shImg").onclick=function(){ask("Share this month’s report as an image?","Share",shareReport)};
+try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
+$("bkBtn").onclick=function(){
+  ask("Save a backup file of all your entries?","Backup",function(){
+    try{
+      var blob=new Blob([JSON.stringify({app:"lelo-budget",saved:iso(new Date()),tx:S.tx,budget:S.budget})],{type:"text/plain"});
+      deliver(blob,"lelo-budget-backup-"+iso(new Date())+".txt","text/plain","bkMsg");
+    }catch(e){$("bkMsg").textContent="Sorry, backup failed. Try again."}
+  });
+};
+$("rsBtn").onclick=function(){$("rsFile").click()};
+$("rsFile").onchange=function(){
+  var f=this.files&&this.files[0];this.value="";
+  if(!f)return;
+  var r=new FileReader();
+  r.onload=function(){
+    var d;try{d=JSON.parse(r.result)}catch(e){d=null}
+    if(!d||!Array.isArray(d.tx)){$("bkMsg").textContent="That doesn’t look like a backup file.";return}
+    var good=[];
+    d.tx.forEach(function(t,i){
+      if(t&&(t.type==="inc"||t.type==="exp")&&typeof t.amt==="number"&&isFinite(t.amt)&&t.amt>0&&typeof t.date==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(t.date))
+        good.push({id:typeof t.id==="number"?t.id:Date.now()+i,type:t.type,amt:t.amt,cat:String(t.cat||"Other").slice(0,40),note:String(t.note||"").slice(0,60),date:t.date});
+    });
+    if(!good.length){$("bkMsg").textContent="No entries found in that file.";return}
+    ask("Restore this backup? Entries that aren’t on this phone yet will be added. Nothing gets deleted.","Restore",function(){
+      var have={};S.tx.forEach(function(t){have[t.id]=1});
+      var n=0;good.forEach(function(t){if(!have[t.id]){S.tx.push(t);have[t.id]=1;n++}});
+      if(d.budget&&typeof d.budget==="object")Object.keys(d.budget).forEach(function(k){if(!(k in S.budget)&&typeof d.budget[k]==="number")S.budget[k]=d.budget[k]});
+      save();
+      var cur=$("month").value;
+      if(!S.tx.some(function(t){return t.date.slice(0,7)===cur})){var last=S.tx.map(function(t){return t.date.slice(0,7)}).sort().pop();if(last)$("month").value=last}
+      render();
+      $("bkMsg").textContent=n?("Restored "+n+" entries 🎀"):"Everything in the backup was already here 🎀";
+    });
+  };
+  r.readAsText(f);
 };
 render();
 })();
